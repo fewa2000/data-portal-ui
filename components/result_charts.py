@@ -1,6 +1,9 @@
 """
 Result Charts Component.
 Renders charts and visualizations for run results.
+
+All data displayed here is PRE-COMPUTED by the backend (mocked).
+The UI does NOT perform any filtering or aggregation.
 """
 
 import streamlit as st
@@ -10,13 +13,13 @@ from typing import Any
 from components.kpi_cards import render_kpi_cards
 
 
-def render_trend_charts(trends: dict[str, Any], business_case: str) -> None:
+def render_trend_charts(trends: dict[str, Any], domain: str) -> None:
     """
     Render trend charts from run results.
 
     Args:
-        trends: Trend data with 'months' and metric arrays
-        business_case: The business case for labeling
+        trends: Trend data with 'months' and metric arrays (pre-computed)
+        domain: The domain for labeling
     """
     if not trends or "months" not in trends:
         st.warning("No trend data available.")
@@ -24,14 +27,14 @@ def render_trend_charts(trends: dict[str, Any], business_case: str) -> None:
 
     months = trends["months"]
 
-    # Determine which metrics to display based on business case
-    if business_case == "sales":
+    # Determine which metrics to display based on domain
+    if domain == "sales":
         metric1, metric2 = "revenue", "orders"
         label1, label2 = "Revenue ($)", "Orders"
-    elif business_case == "procurement":
+    elif domain == "procurement":
         metric1, metric2 = "spend", "orders"
         label1, label2 = "Spend ($)", "Orders"
-    elif business_case == "finance":
+    elif domain == "finance":
         metric1, metric2 = "income", "expenses"
         label1, label2 = "Income ($)", "Expenses ($)"
     else:
@@ -67,13 +70,13 @@ def render_breakdown_chart(breakdown: dict[str, Any]) -> None:
     Render a breakdown bar chart from run results.
 
     Args:
-        breakdown: Breakdown data with 'dimension', 'labels', and 'values'
+        breakdown: Breakdown data with 'dimension', 'labels', and 'values' (pre-computed)
     """
     if not breakdown or "labels" not in breakdown or "values" not in breakdown:
         st.warning("No breakdown data available.")
         return
 
-    dimension = breakdown.get("dimension", "Category").title()
+    dimension = breakdown.get("dimension", "Category").replace("_", " ").title()
     labels = breakdown["labels"]
     values = breakdown["values"]
 
@@ -86,13 +89,15 @@ def render_breakdown_chart(breakdown: dict[str, Any]) -> None:
         st.dataframe(df, use_container_width=True, hide_index=True)
 
 
-def render_run_results(results: dict[str, Any], business_case: str) -> None:
+def render_run_results(results: dict[str, Any], domain: str) -> None:
     """
     Render complete run results including KPIs, trends, and breakdown.
 
+    All data is PRE-COMPUTED by the backend. The UI only renders.
+
     Args:
         results: Complete run results dictionary
-        business_case: The business case
+        domain: The domain
     """
     if not results:
         st.warning("No results available.")
@@ -101,13 +106,13 @@ def render_run_results(results: dict[str, Any], business_case: str) -> None:
     # KPIs
     if "kpis" in results:
         st.subheader("Key Performance Indicators")
-        render_kpi_cards(results["kpis"], business_case)
+        render_kpi_cards(results["kpis"], domain)
         st.divider()
 
     # Trends
     if "trends" in results:
         st.subheader("Trends")
-        render_trend_charts(results["trends"], business_case)
+        render_trend_charts(results["trends"], domain)
         st.divider()
 
     # Breakdown

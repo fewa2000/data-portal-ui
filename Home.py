@@ -1,7 +1,8 @@
 """
 Data Portal UI - Main Entry Point
 
-This is the home page with navigation and business case selection.
+This is the home page with navigation and domain selection.
+The portal is DOMAIN-DRIVEN - domains define what is possible.
 """
 
 import streamlit as st
@@ -18,35 +19,32 @@ st.set_page_config(
 state.init_state()
 
 # =============================================================================
-# Sidebar - Business Case Selector
+# Sidebar - Domain Selector
 # =============================================================================
 
 with st.sidebar:
-    st.header("Business Case")
+    st.header("Domain")
 
-    # Get available business cases
-    business_cases = state.get_business_cases()
-    current_bc = state.get_business_case()
+    # Get available domains
+    domains = state.get_domains()
+    current_domain = state.get_domain()
 
-    # Radio buttons for business case selection
-    selected_bc = st.radio(
-        "Select Business Case",
-        business_cases,
+    # Radio buttons for domain selection
+    selected_domain = st.radio(
+        "Select Domain",
+        domains,
         format_func=str.title,
-        index=business_cases.index(current_bc),
+        index=domains.index(current_domain),
         label_visibility="collapsed",
     )
 
     # Update state if changed
-    if selected_bc != current_bc:
-        state.set_business_case(selected_bc)
+    if selected_domain != current_domain:
+        state.set_domain(selected_domain)
+        state.clear_current_run()
         st.rerun()
 
     st.divider()
-
-    # Show selected inputs count
-    selected_inputs = state.get_selected_inputs()
-    st.caption(f"Selected inputs: {len(selected_inputs)}")
 
     # Show runs count
     run_count = state.get_run_count()
@@ -58,22 +56,21 @@ with st.sidebar:
 
 st.title("Data Portal")
 
-# Display current business case prominently
-bc_display = state.get_business_case().title()
-st.markdown(f"### Current Business Case: **{bc_display}**")
+# Display current domain prominently
+domain_display = state.get_domain().title()
+st.markdown(f"### Current Domain: **{domain_display}**")
 
 st.markdown("---")
 
 st.markdown("""
 Welcome to the Data Portal. This application allows you to:
 
-1. **Input** - Select and configure input data sources
-2. **Dashboards** - Create and execute analytical runs
+1. **Input** - View domain data sources (read-only)
+2. **Dashboards** - Define filters and execute analytical runs
 3. **Archive** - View historical run results
 
-Use the **sidebar** to:
-- Select your business case (Sales, Procurement, Finance)
-- Navigate between sections using the page links
+Use the **sidebar** to select your domain (Sales, Procurement, Finance).
+Each domain has specific filters that translate to SQL queries.
 """)
 
 # Navigation cards
@@ -83,12 +80,12 @@ col1, col2, col3 = st.columns(3)
 
 with col1:
     st.markdown("#### Input")
-    st.markdown("Select data sources for your next run.")
+    st.markdown("View domain tables and schema.")
     st.page_link("pages/1_Input.py", label="Go to Input", icon="📥")
 
 with col2:
     st.markdown("#### Dashboards")
-    st.markdown("Configure and execute analytical runs.")
+    st.markdown("Configure filters and execute runs.")
     st.page_link("pages/2_Dashboards.py", label="Go to Dashboards", icon="📈")
 
 with col3:

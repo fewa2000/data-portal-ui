@@ -1,11 +1,18 @@
 """
 Input Section Page.
-Allows users to see and select available input data sources.
+Shows domain data sources for TRANSPARENCY.
 
-Inputs are NOT executed here - they are selected for use in Dashboards.
+Tables are NOT user-selected - they are defined by the domain.
+This section shows:
+- Which gold table is used for the domain
+- Schema information
+- Sample data preview (mocked)
+
+No execution happens here.
 """
 
 import streamlit as st
+import pandas as pd
 import sys
 from pathlib import Path
 
@@ -23,31 +30,28 @@ st.set_page_config(
 state.init_state()
 
 # =============================================================================
-# Sidebar - Business Case Selector (consistent across all pages)
+# Sidebar - Domain Selector (consistent across all pages)
 # =============================================================================
 
 with st.sidebar:
-    st.header("Business Case")
+    st.header("Domain")
 
-    business_cases = state.get_business_cases()
-    current_bc = state.get_business_case()
+    domains = state.get_domains()
+    current_domain = state.get_domain()
 
-    selected_bc = st.radio(
-        "Select Business Case",
-        business_cases,
+    selected_domain = st.radio(
+        "Select Domain",
+        domains,
         format_func=str.title,
-        index=business_cases.index(current_bc),
+        index=domains.index(current_domain),
         label_visibility="collapsed",
     )
 
-    if selected_bc != current_bc:
-        state.set_business_case(selected_bc)
+    if selected_domain != current_domain:
+        state.set_domain(selected_domain)
         st.rerun()
 
     st.divider()
-
-    selected_inputs = state.get_selected_inputs()
-    st.caption(f"Selected inputs: {len(selected_inputs)}")
 
     run_count = state.get_run_count()
     st.caption(f"Total runs: {run_count}")
@@ -58,117 +62,92 @@ with st.sidebar:
 
 st.title("Input")
 
-# Display current business case
-bc_display = state.get_business_case().title()
-st.markdown(f"**Business Case:** {bc_display}")
+# Display current domain
+domain = state.get_domain()
+domain_display = domain.title()
+st.markdown(f"**Domain:** {domain_display}")
 
 st.markdown("---")
 
-st.markdown("""
-Select the input data sources for your next analytical run.
-These inputs will be used when you execute a run in the Dashboards section.
-""")
+st.info(
+    "This section shows the data source used for this domain. "
+    "Tables are defined by the domain - they are NOT user-selectable."
+)
 
-st.info("These inputs will be used for the next run.")
+# Get domain table information
+table_info = api.get_domain_table_info(domain)
 
-# Get available inputs for current business case
-business_case = state.get_business_case()
-available_inputs = api.get_inputs(business_case)
-selected_input_ids = state.get_selected_inputs()
-
-# Group inputs by type
-file_inputs = [i for i in available_inputs if i["type"] == "file"]
-database_inputs = [i for i in available_inputs if i["type"] == "database"]
+if not table_info:
+    st.warning("No table information available for this domain.")
+    st.stop()
 
 # =============================================================================
-# File Inputs
+# Gold Table Information
 # =============================================================================
 
-st.subheader("File Inputs")
-st.caption("Uploaded CSV and Excel files")
+st.subheader("Gold Table")
 
-if file_inputs:
-    for input_item in file_inputs:
-        input_id = input_item["id"]
-        is_selected = input_id in selected_input_ids
+col1, col2 = st.columns([1, 2])
 
-        col1, col2 = st.columns([0.1, 0.9])
-        with col1:
-            checked = st.checkbox(
-                label=input_item["name"],
-                value=is_selected,
-                key=f"input_{input_id}",
-                label_visibility="collapsed",
-            )
-        with col2:
-            st.markdown(f"**{input_item['name']}**")
-            st.caption(input_item["description"])
+with col1:
+    st.markdown(f"**Table Name:**")
+    st.code(table_info["table"])
 
-        # Update state based on checkbox
-        if checked and input_id not in selected_input_ids:
-            state.add_selected_input(input_id)
-            st.rerun()
-        elif not checked and input_id in selected_input_ids:
-            state.remove_selected_input(input_id)
-            st.rerun()
-else:
-    st.caption("No file inputs available for this business case.")
+with col2:
+    st.markdown(f"**Description:**")
+    st.markdown(table_info["description"])
 
 st.divider()
 
 # =============================================================================
-# Database Inputs
+# Schema Information
 # =============================================================================
 
-st.subheader("Database Tables")
-st.caption("Available database tables")
+st.subheader("Schema")
 
-if database_inputs:
-    for input_item in database_inputs:
-        input_id = input_item["id"]
-        is_selected = input_id in selected_input_ids
-
-        col1, col2 = st.columns([0.1, 0.9])
-        with col1:
-            checked = st.checkbox(
-                label=input_item["name"],
-                value=is_selected,
-                key=f"input_{input_id}",
-                label_visibility="collapsed",
-            )
-        with col2:
-            st.markdown(f"**{input_item['name']}**")
-            st.caption(input_item["description"])
-
-        # Update state based on checkbox
-        if checked and input_id not in selected_input_ids:
-            state.add_selected_input(input_id)
-            st.rerun()
-        elif not checked and input_id in selected_input_ids:
-            state.remove_selected_input(input_id)
-            st.rerun()
+schema_data = table_info.get("schema", [])
+if schema_data:
+    schema_df = pd.DataFrame(schema_data)
+    schema_df.columns = ["Column", "Type", "Description"]
+    st.dataframe(schema_df, use_container_width=True, hide_index=True)
 else:
-    st.caption("No database inputs available for this business case.")
+    st.caption("No schema information available.")
 
 st.divider()
 
 # =============================================================================
-# Selection Summary
+# Sample Data Preview
 # =============================================================================
 
-st.subheader("Selection Summary")
+st.subheader("Sample Data Preview")
+st.caption("First 3 rows (mocked for demonstration)")
 
-selected_input_ids = state.get_selected_inputs()  # Refresh after any changes
-selected_names = [i["name"] for i in available_inputs if i["id"] in selected_input_ids]
-
-if selected_names:
-    st.success(f"**{len(selected_names)} input(s) selected:**")
-    for name in selected_names:
-        st.markdown(f"- {name}")
+sample_rows = table_info.get("sample_rows", [])
+if sample_rows:
+    sample_df = pd.DataFrame(sample_rows)
+    st.dataframe(sample_df, use_container_width=True, hide_index=True)
 else:
-    st.warning("No inputs selected. Please select at least one input source.")
+    st.caption("No sample data available.")
+
+# =============================================================================
+# Available Filters
+# =============================================================================
+
+st.divider()
+st.subheader("Available Filters")
+st.caption("These filters will be available in the Dashboards section.")
+
+filter_options = api.get_filter_options(domain)
+
+if filter_options:
+    for filter_name, options in filter_options.items():
+        display_name = filter_name.replace("_", " ").title()
+        st.markdown(f"**{display_name}:** {', '.join(str(o) for o in options[:5])}" +
+                   (f" (+{len(options) - 5} more)" if len(options) > 5 else ""))
+else:
+    st.caption("No filter options available.")
 
 # Navigation hint
 st.markdown("---")
-st.markdown("Ready to run? Go to **Dashboards** to configure and execute your analysis.")
+st.markdown("Ready to run? Go to **Dashboards** to configure filters and execute your analysis.")
 st.page_link("pages/2_Dashboards.py", label="Go to Dashboards", icon="📈")

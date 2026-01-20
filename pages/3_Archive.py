@@ -30,34 +30,31 @@ st.set_page_config(
 state.init_state()
 
 # =============================================================================
-# Sidebar - Business Case Selector (consistent across all pages)
+# Sidebar - Domain Selector (consistent across all pages)
 # =============================================================================
 
 with st.sidebar:
-    st.header("Business Case")
+    st.header("Domain")
 
-    business_cases = state.get_business_cases()
-    current_bc = state.get_business_case()
+    domains = state.get_domains()
+    current_domain = state.get_domain()
 
-    selected_bc = st.radio(
-        "Select Business Case",
-        business_cases,
+    selected_domain = st.radio(
+        "Select Domain",
+        domains,
         format_func=str.title,
-        index=business_cases.index(current_bc),
+        index=domains.index(current_domain),
         label_visibility="collapsed",
     )
 
-    if selected_bc != current_bc:
-        state.set_business_case(selected_bc)
-        # Clear selected archive run when switching business case
+    if selected_domain != current_domain:
+        state.set_domain(selected_domain)
+        # Clear selected archive run when switching domain
         if "archive_run_id" in st.session_state:
             del st.session_state.archive_run_id
         st.rerun()
 
     st.divider()
-
-    selected_inputs = state.get_selected_inputs()
-    st.caption(f"Selected inputs: {len(selected_inputs)}")
 
     run_count = state.get_run_count()
     st.caption(f"Total runs: {run_count}")
@@ -65,7 +62,7 @@ with st.sidebar:
     # Filter option
     st.divider()
     st.subheader("Filter")
-    show_all = st.checkbox("Show all business cases", value=False)
+    show_all = st.checkbox("Show all domains", value=False)
 
 # =============================================================================
 # Main Content
@@ -73,14 +70,14 @@ with st.sidebar:
 
 st.title("Archive")
 
-# Display current business case
-business_case = state.get_business_case()
-bc_display = business_case.title()
+# Display current domain
+domain = state.get_domain()
+domain_display = domain.title()
 
 if show_all:
-    st.markdown("**Showing runs from all business cases**")
+    st.markdown("**Showing runs from all domains**")
 else:
-    st.markdown(f"**Business Case:** {bc_display}")
+    st.markdown(f"**Domain:** {domain_display}")
 
 st.markdown("---")
 
@@ -88,7 +85,7 @@ st.markdown("---")
 if show_all:
     completed_runs = state.get_completed_runs()
 else:
-    completed_runs = state.get_completed_runs(business_case)
+    completed_runs = state.get_completed_runs(domain)
 
 # =============================================================================
 # Run List
@@ -105,10 +102,11 @@ else:
         col1, col2, col3, col4 = st.columns([3, 2, 2, 1])
 
         with col1:
-            st.markdown(f"**{run.display_name}**")
+            st.markdown(f"**{run.domain.title()}**")
+            st.caption(run.get_filter_summary())
 
         with col2:
-            st.caption(f"Business Case: {run.business_case.title()}")
+            st.caption(f"Domain: {run.domain.title()}")
 
         with col3:
             st.caption(f"Executed: {run.executed_at_formatted}")
@@ -129,24 +127,29 @@ if "archive_run_id" in st.session_state:
 
     if selected_run:
         st.markdown("---")
-        st.subheader(f"Results: {selected_run.display_name}")
+
+        # Run header with clear identification
+        st.subheader(f"Results: {selected_run.domain.title()}")
 
         # Run metadata
-        col1, col2, col3 = st.columns(3)
+        col1, col2 = st.columns(2)
         with col1:
-            st.markdown(f"**Business Case:** {selected_run.business_case.title()}")
+            st.markdown(f"**Domain:** {selected_run.domain.title()}")
         with col2:
-            st.markdown(f"**Period:** {selected_run.parameters.period}")
-        with col3:
-            st.markdown(f"**Scenario:** {selected_run.parameters.scenario.title()}")
+            st.markdown(f"**Executed:** {selected_run.executed_at_formatted}")
 
-        st.caption(f"Executed at: {selected_run.executed_at_formatted}")
+        st.markdown(f"**Filters:** {selected_run.get_filter_summary()}")
         st.caption(f"Run ID: {selected_run.id}")
+
+        # SQL Preview
+        if selected_run.sql_preview:
+            with st.expander("SQL Query (for transparency)", expanded=False):
+                st.code(selected_run.sql_preview, language="sql")
 
         st.divider()
 
         # Render results using shared component
-        render_run_results(selected_run.results, selected_run.business_case)
+        render_run_results(selected_run.results, selected_run.domain)
 
         # Close button
         if st.button("Close Results", type="secondary"):

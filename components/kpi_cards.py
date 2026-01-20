@@ -1,13 +1,17 @@
 """
 KPI Cards Component.
 Displays key performance indicators in a card layout.
+
+KPI calculations are done in the database (mocked), NOT in the UI.
+This component only RENDERS pre-computed KPIs.
 """
 
 import streamlit as st
 from typing import Any
 
 
-# KPI display configuration per business case
+# KPI display configuration per domain
+# This defines how to format and label KPIs for each domain
 _KPI_CONFIG = {
     "sales": {
         "total_revenue": {"label": "Total Revenue", "format": "${:,.0f}"},
@@ -24,25 +28,25 @@ _KPI_CONFIG = {
     "finance": {
         "net_income": {"label": "Net Income", "format": "${:,.0f}"},
         "operating_margin": {"label": "Operating Margin", "format": "{:.1f}%"},
-        "cash_flow": {"label": "Cash Flow", "format": "${:,.0f}"},
-        "debt_ratio": {"label": "Debt Ratio", "format": "{:.2f}"},
+        "total_expenses": {"label": "Total Expenses", "format": "${:,.0f}"},
+        "posting_count": {"label": "Posting Count", "format": "{:,}"},
     },
 }
 
 
-def render_kpi_cards(kpis: dict[str, Any], business_case: str) -> None:
+def render_kpi_cards(kpis: dict[str, Any], domain: str) -> None:
     """
-    Render KPI cards for the given business case.
+    Render KPI cards for the given domain.
 
     Args:
-        kpis: Dictionary of KPI name -> value
-        business_case: The business case for formatting configuration
+        kpis: Dictionary of KPI name -> value (pre-computed by backend)
+        domain: The domain for formatting configuration
     """
     if not kpis:
         st.warning("No KPI data available.")
         return
 
-    config = _KPI_CONFIG.get(business_case, {})
+    config = _KPI_CONFIG.get(domain, {})
 
     # Create columns for KPIs
     cols = st.columns(len(kpis))
@@ -56,7 +60,7 @@ def render_kpi_cards(kpis: dict[str, Any], business_case: str) -> None:
 
 def render_kpi_cards_generic(kpis: dict[str, Any]) -> None:
     """
-    Render KPI cards without business case specific formatting.
+    Render KPI cards without domain-specific formatting.
     Useful for displaying arbitrary KPIs.
 
     Args:
