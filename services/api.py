@@ -109,6 +109,48 @@ def get_domain_table_info(domain: str) -> dict:
     return result
 
 
+def get_date_range(domain: str) -> tuple[str | None, str | None]:
+    """
+    Get the min and max date values from the domain's table.
+
+    Returns:
+        Tuple of (min_date, max_date) as ISO format strings, or (None, None) if unavailable.
+    """
+    table_info = DOMAIN_TABLES.get(domain)
+    if not table_info:
+        return None, None
+
+    table = table_info["table"]
+
+    # Determine the date column based on domain
+    date_column = {
+        "sales": "order_date",
+        "procurement": "purchase_date",
+        "finance": None,  # Finance uses posting_period, not a date
+    }.get(domain)
+
+    if not date_column:
+        return None, None
+
+    try:
+        sql = f"SELECT MIN({date_column}) as min_date, MAX({date_column}) as max_date FROM {table}"
+        rows = execute_query(sql)
+        if rows:
+            row = rows[0]
+            min_date = row.get("min_date")
+            max_date = row.get("max_date")
+            # Convert to ISO format strings if they're date objects
+            if min_date:
+                min_date = str(min_date)
+            if max_date:
+                max_date = str(max_date)
+            return min_date, max_date
+    except Exception:
+        pass
+
+    return None, None
+
+
 def get_filter_options(domain: str) -> dict:
     """
     Get available filter options for a domain from the database.

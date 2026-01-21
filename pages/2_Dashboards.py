@@ -77,6 +77,9 @@ st.markdown("---")
 # Get filter options for this domain
 filter_options = api.get_filter_options(domain)
 
+# Get date range from database for date-based filters
+date_range_min, date_range_max = api.get_date_range(domain)
+
 # =============================================================================
 # Domain-Specific Filter UI
 # =============================================================================
@@ -92,17 +95,24 @@ if domain == "sales":
 
     with col1:
         st.markdown("**Order Date Range**")
+        # Use database date range or fallback to defaults
+        default_from = date.fromisoformat(date_range_min) if date_range_min else date.today() - timedelta(days=180)
+        default_to = date.fromisoformat(date_range_max) if date_range_max else date.today()
         date_col1, date_col2 = st.columns(2)
         with date_col1:
             date_from = st.date_input(
                 "From",
-                value=date.today() - timedelta(days=180),
+                value=default_from,
+                min_value=default_from if date_range_min else None,
+                max_value=default_to if date_range_max else None,
                 key="sales_date_from"
             )
         with date_col2:
             date_to = st.date_input(
                 "To",
-                value=date.today(),
+                value=default_to,
+                min_value=default_from if date_range_min else None,
+                max_value=default_to if date_range_max else None,
                 key="sales_date_to"
             )
         filters["date_from"] = date_from.isoformat() if date_from else None
@@ -140,17 +150,24 @@ elif domain == "procurement":
 
     with col1:
         st.markdown("**Purchase Date Range**")
+        # Use database date range or fallback to defaults
+        default_from = date.fromisoformat(date_range_min) if date_range_min else date.today() - timedelta(days=180)
+        default_to = date.fromisoformat(date_range_max) if date_range_max else date.today()
         date_col1, date_col2 = st.columns(2)
         with date_col1:
             date_from = st.date_input(
                 "From",
-                value=date.today() - timedelta(days=180),
+                value=default_from,
+                min_value=default_from if date_range_min else None,
+                max_value=default_to if date_range_max else None,
                 key="proc_date_from"
             )
         with date_col2:
             date_to = st.date_input(
                 "To",
-                value=date.today(),
+                value=default_to,
+                min_value=default_from if date_range_min else None,
+                max_value=default_to if date_range_max else None,
                 key="proc_date_to"
             )
         filters["date_from"] = date_from.isoformat() if date_from else None

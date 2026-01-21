@@ -1,6 +1,16 @@
+import os
+from pathlib import Path
+
+from dotenv import load_dotenv
 from sqlalchemy import create_engine, text
 
-DB_URL = "postgresql+psycopg2://postgres:password@localhost:5432/data_portal"
+# Load .env file from project root
+_project_root = Path(__file__).parent.parent
+_env_file = _project_root / ".env"
+if _env_file.exists():
+    load_dotenv(_env_file)
+
+DB_URL = os.environ["DATABASE_URL"]
 
 engine = create_engine(DB_URL)
 

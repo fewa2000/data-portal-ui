@@ -2,21 +2,27 @@
 Database connection helper using SQLAlchemy 2.0.
 
 Reads connection string from DATABASE_URL environment variable.
+Supports loading from .env file in project root.
 """
 
 import os
 from contextlib import contextmanager
+from pathlib import Path
 from typing import Generator
 
+from dotenv import load_dotenv
 from sqlalchemy import create_engine, text
 from sqlalchemy.engine import Engine, Connection
 
 
-# Read connection string from environment variable
-DATABASE_URL = os.environ.get(
-    "DATABASE_URL",
-    "postgresql://postgres:postgres@localhost:5432/dataportal"
-)
+# Load .env file from project root if it exists
+_project_root = Path(__file__).parent.parent
+_env_file = _project_root / ".env"
+if _env_file.exists():
+    load_dotenv(_env_file)
+
+# Read connection string from environment variable (loaded from .env)
+DATABASE_URL = os.environ["DATABASE_URL"]
 
 # Create engine with connection pooling
 _engine: Engine | None = None
