@@ -1,6 +1,6 @@
-from sqlalchemy import create_engine
+from sqlalchemy import create_engine, text
 
-DB_URL = "postgresql+psycopg2://user:password@localhost:5432/dataportal"
+DB_URL = "postgresql+psycopg2://postgres:password@localhost:5432/data_portal"
 
 engine = create_engine(DB_URL)
 
@@ -14,3 +14,8 @@ def write_df(df, table):
         method="multi",
         chunksize=5000
     )
+
+
+with engine.connect() as conn:
+    result = conn.execute(text("SELECT current_database();"))
+    print(result.fetchone())

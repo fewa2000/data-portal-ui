@@ -1,0 +1,56 @@
+SALES:
+Generating 1,428,571 unique visitors for 50,000 orders...
+Expected conversion rate: 3.5%
+Actual conversion rate: 101.77%
+Unique visitors: 49,131
+Total orders: 50,000
+
+✅ Sales data loaded
+
+
+
+
+
+
+PROCUREMENT:
+Generating 25,000 purchase orders...
+Expected on-time delivery rate: 92%
+
+Actual on-time delivery rate: 91.95%
+On-time orders: 22,987 / 25,000
+
+Procurement Summary:
+  Total Spend: $313,644,951.06
+  Average PO Value: $12,545.80
+  Total Purchase Orders: 25,000
+
+Supplier Distribution:
+  Supplier A: 6,319 POs ($79,903,891.83)
+  Supplier B: 6,225 POs ($78,395,722.49)
+  Supplier C: 6,137 POs ($76,782,889.07)
+  Supplier D: 6,319 POs ($78,562,447.67)
+
+✅ Procurement data loaded
+
+
+
+
+
+
+FINANCE: 
+Generating 40,000 GL postings...
+Expected distribution: Revenue (45%), Operating Income (15%), Expense (40%)
+
+Actual distribution:
+  Revenue: 17,884 postings (44.7%)
+  Operating Income: 6,040 postings (15.1%)
+  Expense: 16,076 postings (40.2%)
+
+Financial Summary:
+  Total Revenue: $182,683,277.22
+  Operating Income: $62,071,582.28
+  Total Expenses: $165,409,085.14
+  Net Income: $79,345,774.36
+  Operating Margin: 34.0%
+
+✅ Finance data loaded

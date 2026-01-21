@@ -19,6 +19,9 @@ def main():
     fake = Faker()
     data = []
 
+    print(f"Generating {ROWS:,} GL postings...")
+    print(f"Expected distribution: Revenue (45%), Operating Income (15%), Expense (40%)")
+
     for i in range(ROWS):
         posting_period = date(
             year=random.choice([2024, 2025]),
@@ -48,8 +51,32 @@ def main():
 
     df = pd.DataFrame(data)
 
+    # Calculate statistics
+    revenue_count = len(df[df['account_type'] == 'REVENUE'])
+    operating_income_count = len(df[df['account_type'] == 'OPERATING_INCOME'])
+    expense_count = len(df[df['account_type'] == 'EXPENSE'])
+    
+    total_revenue = df[df['account_type'] == 'REVENUE']['amount'].sum()
+    total_operating_income = df[df['account_type'] == 'OPERATING_INCOME']['amount'].sum()
+    total_expenses = df[df['account_type'] == 'EXPENSE']['amount'].sum()
+    net_income = df['amount'].sum()
+    
+    operating_margin = (total_operating_income / total_revenue * 100) if total_revenue > 0 else 0
+
+    print(f"\nActual distribution:")
+    print(f"  Revenue: {revenue_count:,} postings ({revenue_count/ROWS*100:.1f}%)")
+    print(f"  Operating Income: {operating_income_count:,} postings ({operating_income_count/ROWS*100:.1f}%)")
+    print(f"  Expense: {expense_count:,} postings ({expense_count/ROWS*100:.1f}%)")
+    
+    print(f"\nFinancial Summary:")
+    print(f"  Total Revenue: ${total_revenue:,.2f}")
+    print(f"  Operating Income: ${total_operating_income:,.2f}")
+    print(f"  Total Expenses: ${abs(total_expenses):,.2f}")
+    print(f"  Net Income: ${net_income:,.2f}")
+    print(f"  Operating Margin: {operating_margin:.1f}%")
+
     write_df(df, "gl_postings_fact")
-    print("✅ Finance data loaded")
+    print("\n✅ Finance data loaded")
 
 
 if __name__ == "__main__":
