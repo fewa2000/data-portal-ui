@@ -8,10 +8,50 @@ The UI only collects filter parameters - it NEVER filters data itself.
 """
 
 from typing import Any
+from urllib.parse import urlparse
 
 from sqlalchemy import text, bindparam
 
-from services.db import get_connection, execute_query
+from services.db import get_connection, execute_query, get_engine, DATABASE_URL
+
+
+def get_database_status() -> dict:
+    """
+    Get current database connection status.
+
+    Returns:
+        Dictionary with connection info:
+        - connected: bool
+        - database: str (database name)
+        - server: str (host:port)
+        - error: str (if connection failed)
+    """
+    result = {
+        "connected": False,
+        "database": "",
+        "server": "",
+        "error": None,
+    }
+
+    # Parse connection string to extract server info
+    try:
+        parsed = urlparse(DATABASE_URL)
+        result["database"] = parsed.path.lstrip("/") if parsed.path else "unknown"
+        result["server"] = f"{parsed.hostname}:{parsed.port}" if parsed.port else parsed.hostname or "unknown"
+    except Exception:
+        result["database"] = "unknown"
+        result["server"] = "unknown"
+
+    # Test actual connection
+    try:
+        with get_connection() as conn:
+            conn.execute(text("SELECT 1"))
+        result["connected"] = True
+    except Exception as e:
+        result["connected"] = False
+        result["error"] = str(e)
+
+    return result
 
 
 # =============================================================================
@@ -50,7 +90,7 @@ DOMAIN_TABLES = {
         "table": "mart.gl_postings_fact",
         "description": "Aggregated general ledger posting data",
         "schema": [
-            {"column": "posting_period", "type": "VARCHAR", "description": "Posting period (YYYY-MM)"},
+            {"column": "posting_period", "type": "DATE", "description": "Posting period"},
             {"column": "company_code", "type": "VARCHAR", "description": "Company code"},
             {"column": "cost_center", "type": "VARCHAR", "description": "Cost center"},
             {"column": "account", "type": "VARCHAR", "description": "GL account"},
@@ -85,20 +125,46 @@ def get_domain_table_info(domain: str) -> dict:
     """
     Get table information for a domain including schema and sample rows.
     This is for TRANSPARENCY - showing users what data source is used.
+
+    Schema is fetched from the database (information_schema) for accuracy.
+    Falls back to hardcoded schema if database is unavailable.
     """
     info = DOMAIN_TABLES.get(domain, {})
     if not info:
         return {}
 
+    table = info["table"]
+    schema_name, table_name = table.split(".")
+
     result = {
-        "table": info["table"],
+        "table": table,
         "description": info["description"],
-        "schema": info["schema"],
+        "schema": [],
         "sample_rows": [],
     }
 
+    # Fetch schema from database
+    try:
+        schema_sql = """
+            SELECT column_name, data_type
+            FROM information_schema.columns
+            WHERE table_schema = :schema_name AND table_name = :table_name
+            ORDER BY ordinal_position
+        """
+        schema_rows = execute_query(schema_sql, {"schema_name": schema_name, "table_name": table_name})
+        if schema_rows:
+            result["schema"] = [
+                {"column": row["column_name"], "type": row["data_type"].upper(), "description": ""}
+                for row in schema_rows
+            ]
+        else:
+            # Fallback to hardcoded schema
+            result["schema"] = info["schema"]
+    except Exception:
+        # Fallback to hardcoded schema if DB unavailable
+        result["schema"] = info["schema"]
+
     # Fetch sample rows from database
-    table = info["table"]
     try:
         sample_rows = execute_query(f"SELECT * FROM {table} LIMIT 5")
         result["sample_rows"] = sample_rows
@@ -126,7 +192,7 @@ def get_date_range(domain: str) -> tuple[str | None, str | None]:
     date_column = {
         "sales": "order_date",
         "procurement": "purchase_date",
-        "finance": None,  # Finance uses posting_period, not a date
+        "finance": "posting_period",  # posting_period is stored as DATE
     }.get(domain)
 
     if not date_column:
@@ -171,7 +237,15 @@ def get_filter_options(domain: str) -> dict:
         try:
             sql = f"SELECT DISTINCT {column_name} FROM {table} WHERE {column_name} IS NOT NULL ORDER BY {column_name}"
             rows = execute_query(sql)
-            result[filter_name] = [row[column_name] for row in rows]
+            values = [row[column_name] for row in rows]
+            # Convert date objects to YYYY-MM strings for period filters
+            if filter_name == "periods":
+                from datetime import date as date_type
+                values = [
+                    v.strftime("%Y-%m") if isinstance(v, date_type) else str(v)
+                    for v in values
+                ]
+            result[filter_name] = values
         except Exception:
             result[filter_name] = []
 
@@ -234,15 +308,29 @@ def _build_procurement_where_clause(filters: dict) -> tuple[str, dict]:
 
 def _build_finance_where_clause(filters: dict) -> tuple[str, dict]:
     """Build WHERE clause and params for finance queries."""
+    from datetime import date as date_type
+    from calendar import monthrange
+
     conditions = []
     params = {}
 
+    # Convert YYYY-MM period strings to proper dates for PostgreSQL DATE column
     if filters.get("period_from"):
+        period_from = filters["period_from"]
+        # Convert "YYYY-MM" to first day of month "YYYY-MM-01"
+        if isinstance(period_from, str) and len(period_from) == 7:
+            period_from = f"{period_from}-01"
         conditions.append("posting_period >= :period_from")
-        params["period_from"] = filters["period_from"]
+        params["period_from"] = period_from
     if filters.get("period_to"):
+        period_to = filters["period_to"]
+        # Convert "YYYY-MM" to last day of month
+        if isinstance(period_to, str) and len(period_to) == 7:
+            year, month = int(period_to[:4]), int(period_to[5:7])
+            last_day = monthrange(year, month)[1]
+            period_to = f"{period_to}-{last_day:02d}"
         conditions.append("posting_period <= :period_to")
-        params["period_to"] = filters["period_to"]
+        params["period_to"] = period_to
     if filters.get("company_codes"):
         conditions.append("company_code IN :company_codes")
         params["company_codes"] = tuple(filters["company_codes"])
@@ -336,8 +424,8 @@ def _generate_finance_sql(filters: dict) -> str:
     where_clause = " AND ".join(where_clauses) if where_clauses else "1=1"
 
     return f"""SELECT
-    SUM(CASE WHEN amount > 0 THEN amount ELSE 0 END) as total_income,
-    SUM(CASE WHEN amount < 0 THEN ABS(amount) ELSE 0 END) as total_expenses,
+    SUM(CASE WHEN account_type IN ('REVENUE', 'OPERATING_INCOME') THEN amount ELSE 0 END) as total_income,
+    SUM(CASE WHEN account_type = 'EXPENSE' THEN ABS(amount) ELSE 0 END) as total_expenses,
     SUM(amount) as net_income,
     COUNT(*) as posting_count
 FROM mart.gl_postings_fact
@@ -569,10 +657,11 @@ def _execute_finance_run(filters: dict) -> dict:
     where_clause, params = _build_finance_where_clause(filters)
 
     # KPIs query - use account_type to distinguish income vs expenses
+    # Account types in DB are uppercase: REVENUE, OPERATING_INCOME, EXPENSE
     kpi_sql = f"""
         SELECT
-            COALESCE(SUM(CASE WHEN account_type = 'revenue' THEN amount ELSE 0 END), 0) as total_income,
-            COALESCE(SUM(CASE WHEN account_type = 'expense' THEN ABS(amount) ELSE 0 END), 0) as total_expenses,
+            COALESCE(SUM(CASE WHEN account_type IN ('REVENUE', 'OPERATING_INCOME') THEN amount ELSE 0 END), 0) as total_income,
+            COALESCE(SUM(CASE WHEN account_type = 'EXPENSE' THEN ABS(amount) ELSE 0 END), 0) as total_expenses,
             COALESCE(SUM(amount), 0) as net_income,
             COUNT(*) as posting_count
         FROM mart.gl_postings_fact
@@ -592,12 +681,13 @@ def _execute_finance_run(filters: dict) -> dict:
         "posting_count": int(kpi_row.get("posting_count", 0)),
     }
 
-    # Trends query - group by posting_period (already YYYY-MM format)
+    # Trends query - group by posting_period (stored as DATE in DB)
+    # Account types in DB are uppercase: REVENUE, OPERATING_INCOME, EXPENSE
     trends_sql = f"""
         SELECT
             posting_period,
-            COALESCE(SUM(CASE WHEN account_type = 'revenue' THEN amount ELSE 0 END), 0) as income,
-            COALESCE(SUM(CASE WHEN account_type = 'expense' THEN ABS(amount) ELSE 0 END), 0) as expenses
+            COALESCE(SUM(CASE WHEN account_type IN ('REVENUE', 'OPERATING_INCOME') THEN amount ELSE 0 END), 0) as income,
+            COALESCE(SUM(CASE WHEN account_type = 'EXPENSE' THEN ABS(amount) ELSE 0 END), 0) as expenses
         FROM mart.gl_postings_fact
         WHERE {where_clause}
         GROUP BY posting_period
@@ -615,9 +705,17 @@ def _execute_finance_run(filters: dict) -> dict:
     months = []
     for row in trend_rows:
         period = row["posting_period"]
-        if period and len(period) >= 7:
-            month_num = period[5:7]
-            months.append(month_abbrevs.get(month_num, period))
+        if period:
+            # Handle date objects from database
+            from datetime import date as date_type
+            if isinstance(period, date_type):
+                month_num = period.strftime("%m")
+                months.append(month_abbrevs.get(month_num, period.strftime("%Y-%m")))
+            elif isinstance(period, str) and len(period) >= 7:
+                month_num = period[5:7]
+                months.append(month_abbrevs.get(month_num, period))
+            else:
+                months.append(str(period))
         else:
             months.append(str(period))
 

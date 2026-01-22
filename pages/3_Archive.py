@@ -15,9 +15,11 @@ import sys
 from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).parent.parent))
-from services import state
+from services import api, state
 from models.run import RunStatus
 from components.result_charts import render_run_results
+from components.db_status import render_db_status
+from components.data_source_badge import render_results_source
 
 # Page configuration
 st.set_page_config(
@@ -63,6 +65,9 @@ with st.sidebar:
     st.divider()
     st.subheader("Filter")
     show_all = st.checkbox("Show all domains", value=False)
+
+    st.divider()
+    render_db_status()
 
 # =============================================================================
 # Main Content
@@ -128,8 +133,13 @@ if "archive_run_id" in st.session_state:
     if selected_run:
         st.markdown("---")
 
+        # Get table info for source badge
+        run_table_info = api.DOMAIN_TABLES.get(selected_run.domain, {})
+        run_table_name = run_table_info.get("table", "unknown")
+
         # Run header with clear identification
         st.subheader(f"Results: {selected_run.domain.title()}")
+        render_results_source(run_table_name, "Aggregation with GROUP BY")
 
         # Run metadata
         col1, col2 = st.columns(2)

@@ -10,7 +10,7 @@ A RUN is:
 
 Filter UI is rendered BASED ON DOMAIN.
 Filters translate to SQL WHERE clauses - the UI NEVER filters data itself.
-KPI calculations happen in the database (mocked), NOT in the UI.
+KPI calculations happen in the database, NOT in the UI.
 """
 
 import streamlit as st
@@ -22,6 +22,8 @@ sys.path.insert(0, str(Path(__file__).parent.parent))
 from services import api, state
 from models.run import Run, RunStatus
 from components.result_charts import render_run_results
+from components.db_status import render_db_status
+from components.data_source_badge import render_date_range_source, render_results_source
 
 # Page configuration
 st.set_page_config(
@@ -61,6 +63,9 @@ with st.sidebar:
     run_count = state.get_run_count()
     st.caption(f"Total runs: {run_count}")
 
+    st.divider()
+    render_db_status()
+
 # =============================================================================
 # Main Content
 # =============================================================================
@@ -80,6 +85,10 @@ filter_options = api.get_filter_options(domain)
 # Get date range from database for date-based filters
 date_range_min, date_range_max = api.get_date_range(domain)
 
+# Get table info for source badges
+table_info = api.DOMAIN_TABLES.get(domain, {})
+table_name = table_info.get("table", "unknown")
+
 # =============================================================================
 # Domain-Specific Filter UI
 # =============================================================================
@@ -95,6 +104,7 @@ if domain == "sales":
 
     with col1:
         st.markdown("**Order Date Range**")
+        render_date_range_source(table_name, "order_date")
         # Use database date range or fallback to defaults
         default_from = date.fromisoformat(date_range_min) if date_range_min else date.today() - timedelta(days=180)
         default_to = date.fromisoformat(date_range_max) if date_range_max else date.today()
@@ -150,6 +160,7 @@ elif domain == "procurement":
 
     with col1:
         st.markdown("**Purchase Date Range**")
+        render_date_range_source(table_name, "purchase_date")
         # Use database date range or fallback to defaults
         default_from = date.fromisoformat(date_range_min) if date_range_min else date.today() - timedelta(days=180)
         default_to = date.fromisoformat(date_range_max) if date_range_max else date.today()
@@ -205,24 +216,31 @@ elif domain == "finance":
 
     with col1:
         st.markdown("**Posting Period Range**")
-        periods = filter_options.get("periods", [])
+        render_date_range_source(table_name, "posting_period")
+        # Use database date range (posting_period is stored as DATE)
+        default_from = date.fromisoformat(date_range_min) if date_range_min else date.today().replace(day=1) - timedelta(days=365)
+        default_to = date.fromisoformat(date_range_max) if date_range_max else date.today().replace(day=1)
+
         period_col1, period_col2 = st.columns(2)
         with period_col1:
-            period_from = st.selectbox(
+            period_from_date = st.date_input(
                 "From",
-                options=periods,
-                index=0 if periods else None,
+                value=default_from,
+                min_value=default_from if date_range_min else None,
+                max_value=default_to if date_range_max else None,
                 key="fin_period_from"
             )
         with period_col2:
-            period_to = st.selectbox(
+            period_to_date = st.date_input(
                 "To",
-                options=periods,
-                index=len(periods) - 1 if periods else None,
+                value=default_to,
+                min_value=default_from if date_range_min else None,
+                max_value=default_to if date_range_max else None,
                 key="fin_period_to"
             )
-        filters["period_from"] = period_from
-        filters["period_to"] = period_to
+        # Convert dates to YYYY-MM format for the API
+        filters["period_from"] = period_from_date.strftime("%Y-%m") if period_from_date else None
+        filters["period_to"] = period_to_date.strftime("%Y-%m") if period_to_date else None
 
     with col2:
         company_codes = st.multiselect(
@@ -259,7 +277,7 @@ st.divider()
 with st.expander("SQL Preview (for transparency)", expanded=False):
     sql_preview = api.generate_sql_preview(domain, filters)
     st.code(sql_preview, language="sql")
-    st.caption("This SQL is conceptually correct but mocked - no actual database execution.")
+    st.caption(f"Query executed against: `{table_name}`")
 
 # =============================================================================
 # Run Execution
@@ -305,6 +323,7 @@ if current_run_id:
 
         # Run header with clear identification
         st.subheader(f"Results: {current_run.domain.title()}")
+        render_results_source(table_name, "Aggregation with GROUP BY")
         st.markdown(f"**Filters:** {current_run.get_filter_summary()}")
         st.caption(f"Executed at: {current_run.executed_at_formatted}")
 

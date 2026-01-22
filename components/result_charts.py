@@ -2,7 +2,7 @@
 Result Charts Component.
 Renders charts and visualizations for run results.
 
-All data displayed here is PRE-COMPUTED by the backend (mocked).
+All data displayed here is PRE-COMPUTED by the backend.
 The UI does NOT perform any filtering or aggregation.
 """
 
@@ -11,6 +11,7 @@ import pandas as pd
 from typing import Any
 
 from components.kpi_cards import render_kpi_cards
+from services import api
 
 
 def render_trend_charts(trends: dict[str, Any], domain: str) -> None:
@@ -103,15 +104,21 @@ def render_run_results(results: dict[str, Any], domain: str) -> None:
         st.warning("No results available.")
         return
 
+    # Get table name for source attribution
+    table_info = api.DOMAIN_TABLES.get(domain, {})
+    table_name = table_info.get("table", "unknown")
+
     # KPIs
     if "kpis" in results:
         st.subheader("Key Performance Indicators")
+        st.caption(f"Computed from: `{table_name}` | Query: SUM, COUNT, AVG aggregations")
         render_kpi_cards(results["kpis"], domain)
         st.divider()
 
     # Trends
     if "trends" in results:
         st.subheader("Trends")
+        st.caption(f"Computed from: `{table_name}` | Query: GROUP BY month")
         render_trend_charts(results["trends"], domain)
         st.divider()
 
@@ -119,4 +126,5 @@ def render_run_results(results: dict[str, Any], domain: str) -> None:
     if "breakdown" in results:
         dimension = results["breakdown"].get("dimension", "category").replace("_", " ").title()
         st.subheader(f"Breakdown by {dimension}")
+        st.caption(f"Computed from: `{table_name}` | Query: GROUP BY {results['breakdown'].get('dimension', 'category')}")
         render_breakdown_chart(results["breakdown"])

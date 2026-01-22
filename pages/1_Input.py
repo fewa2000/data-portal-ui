@@ -6,7 +6,7 @@ Tables are NOT user-selected - they are defined by the domain.
 This section shows:
 - Which gold table is used for the domain
 - Schema information
-- Sample data preview (mocked)
+- Sample data preview
 
 No execution happens here.
 """
@@ -18,6 +18,12 @@ from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).parent.parent))
 from services import api, state
+from components.db_status import render_db_status
+from components.data_source_badge import (
+    render_schema_source,
+    render_sample_source,
+    render_filter_source,
+)
 
 # Page configuration
 st.set_page_config(
@@ -55,6 +61,9 @@ with st.sidebar:
 
     run_count = state.get_run_count()
     st.caption(f"Total runs: {run_count}")
+
+    st.divider()
+    render_db_status()
 
 # =============================================================================
 # Main Content
@@ -105,6 +114,11 @@ st.divider()
 
 st.subheader("Schema")
 
+# Parse table name for source badge
+table_full_name = table_info["table"]
+schema_name, table_name = table_full_name.split(".")
+render_schema_source(schema_name, table_name)
+
 schema_data = table_info.get("schema", [])
 if schema_data:
     schema_df = pd.DataFrame(schema_data)
@@ -120,9 +134,10 @@ st.divider()
 # =============================================================================
 
 st.subheader("Sample Data Preview")
-st.caption("First 3 rows (mocked for demonstration)")
 
 sample_rows = table_info.get("sample_rows", [])
+render_sample_source(table_full_name, limit=5, row_count=len(sample_rows) if sample_rows else 0)
+
 if sample_rows:
     sample_df = pd.DataFrame(sample_rows)
     st.dataframe(sample_df, use_container_width=True, hide_index=True)
@@ -139,11 +154,16 @@ st.caption("These filters will be available in the Dashboards section.")
 
 filter_options = api.get_filter_options(domain)
 
+# Get filter column mappings for source badges
+filter_columns = api.FILTER_COLUMNS.get(domain, {})
+
 if filter_options:
     for filter_name, options in filter_options.items():
         display_name = filter_name.replace("_", " ").title()
+        column_name = filter_columns.get(filter_name, filter_name)
         st.markdown(f"**{display_name}:** {', '.join(str(o) for o in options[:5])}" +
                    (f" (+{len(options) - 5} more)" if len(options) > 5 else ""))
+        render_filter_source(table_full_name, column_name, count=len(options))
 else:
     st.caption("No filter options available.")
 

@@ -7,6 +7,7 @@ The portal is DOMAIN-DRIVEN - domains define what is possible.
 
 import streamlit as st
 from services import state
+from components.db_status import render_db_status
 
 # Page configuration
 st.set_page_config(
@@ -49,6 +50,9 @@ with st.sidebar:
     # Show runs count
     run_count = state.get_run_count()
     st.caption(f"Total runs: {run_count}")
+
+    st.divider()
+    render_db_status()
 
 # =============================================================================
 # Main Content
